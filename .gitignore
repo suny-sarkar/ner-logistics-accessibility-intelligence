@@ -213,7 +213,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Streamlit secrets
+# Streamlit secrets (NEVER TRACK OR COMMIT)
 .streamlit/secrets.toml
 
 # Explicit compiled Python files
@@ -221,5 +221,12 @@ __marimo__/
 *.pyo
 *.pyd
 
-# Local runtime & test state files
-data/*.json
+# Local runtime session, queues, and atomic write temp files
+data/active_session.json
+data/pending_offline_reports.json
+data/synchronized_reports.json
+data/public_help_requests.json
+data/*.tmp
+
+# Preserve data directory structure if empty
+!data/.gitkeep
