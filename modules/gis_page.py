@@ -416,9 +416,9 @@ def render_gis_page():
 
     # Authoritative GIS Road-Status Data Layer (Shared Live TomTom Traffic Data with Home GIS)
     try:
-        gis_corridors, _corridor_data, _corridor_meta = get_authoritative_corridor_status()
+        gis_corridors, corridor_data, _corridor_meta = get_authoritative_corridor_status()
     except Exception:
-        gis_corridors, _corridor_data, _corridor_meta = get_static_fallback_corridors()
+        gis_corridors, corridor_data, _corridor_meta = get_static_fallback_corridors()
 
     # Ensure auxiliary fields exist for PyDeck tooltip compatibility
     for _col in ["cargo", "vehicle", "incident"]:
@@ -436,17 +436,6 @@ def render_gis_page():
             "incident": "Heavy Rainfall / Landslide Risk",
             "status": "AT RISK",
             "advisory": "Precipitation Monitored",
-            "cargo": "",
-            "vehicle": ""
-        },
-        {
-            "name": "Road Closure",
-            "lat": 25.15,
-            "lon": 92.45,
-            "risk": "95%",
-            "incident": "NH-27 Blockage near Haflong",
-            "status": "ROAD BLOCKAGE / CLOSED",
-            "advisory": "NH-27 Landslide near Haflong",
             "cargo": "",
             "vehicle": ""
         }
@@ -705,29 +694,8 @@ def render_gis_page():
         st.markdown('<div class="corridor-accessibility-container-marker"></div>', unsafe_allow_html=True)
         st.markdown("### Corridor Accessibility")
         
-        accessibility = pd.DataFrame([
-            {
-                "Corridor": "Guwahati → Imphal",
-                "Status": "⚠️ AT RISK",
-                "Risk": "82%",
-                "Reason": "Heavy rainfall"
-            },
-            {
-                "Corridor": "Guwahati → Shillong",
-                "Status": "🟢 ACCESSIBLE",
-                "Risk": "21%",
-                "Reason": "Normal"
-            },
-            {
-                "Corridor": "Silchar → Imphal",
-                "Status": "🔴 BLOCKED",
-                "Risk": "95%",
-                "Reason": "Simulated landslide"
-            }
-        ])
-        
         st.dataframe(
-            accessibility,
+            corridor_data,
             use_container_width=True,
             hide_index=True
         )
