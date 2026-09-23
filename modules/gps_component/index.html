@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Realtime GPS Tracker</title>
+</head>
+<body style="margin: 0; padding: 0; overflow: hidden; background: transparent;">
+<script>
+  let watchId = null;
+  let lastLat = null;
+  let lastLon = null;
+  let lastTriggerId = 0;
+  let isRequesting = false;
+  let currentIsOnline = true;
+  let currentActive = false;
+
+  function sendToStreamlit(value) {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setComponentValue",
+      value: value
+    }, "*");
+  }
+
+  function setFrameHeight(height) {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setFrameHeight",
+      height: height
+    }, "*");
+  }
+
+  function updateParentInputsDirectly(lat, lon) {
+    // Only update parent DOM inputs if online and GPS active
+    if (!currentIsOnline || !currentActive) return;
+    try {
+      if (window.parent && window.parent.document) {
+        const doc = window.parent.document;
+        const latInputs = doc.querySelectorAll('input[aria-label="Latitude"]');
+        const lonInputs = doc.querySelectorAll('input[aria-label="Longitude"]');
+        
+        latInputs.forEach(function(input) {
+          if (input && input.value !== lat.toFixed(6)) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, lat.toFixed(6));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+        
+        lonInputs.forEach(function(input) {
+          if (input && input.value !== lon.toFixed(6)) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, lon.toFixed(6));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }
+    } catch (e) {
+      // Ignored if cross-origin boundary
+    }
+  }
+
+  function handlePositionSuccess(pos, forceUpdate) {
+    isRequesting = false;
+    // Strict guard: If offline or inactive, discard coordinates completely
+    if (!currentIsOnline || !currentActive || !pos || !pos.coords) return;
+    
+    const lat = parseFloat(pos.coords.latitude.toFixed(6));
+    const lon = parseFloat(pos.coords.longitude.toFixed(6));
+    const accuracy = pos.coords.accuracy ? parseFloat(pos.coords.accuracy.toFixed(1)) : null;
+
+    updateParentInputsDirectly(lat, lon);
+
+    if (forceUpdate || lastLat === null || Math.abs(lat - lastLat) > 0.000001 || Math.abs(lon - lastLon) > 0.000001) {
+      lastLat = lat;
+      lastLon = lon;
+      sendToStreamlit({
+        lat: lat,
+        lon: lon,
+        accuracy: accuracy,
+        timestamp: pos.timestamp || Date.now(),
+        error: null
+      });
+    }
+  }
+
+  function handlePositionError(err) {
+    isRequesting = false;
+    if (!currentIsOnline || !currentActive) return;
+    
+    let msg = "GPS error occurred.";
+    if (err) {
+      if (err.code === 1) {
+        msg = "Location permission denied. Please allow location access in your browser settings.";
+      } else if (err.code === 2) {
+        msg = "GPS position unavailable. Please ensure location services are enabled.";
+      } else if (err.code === 3) {
+        msg = "GPS request timed out. Please click again to retry.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+    }
+    sendToStreamlit({
+      lat: null,
+      lon: null,
+      error: msg,
+      errorCode: err ? err.code : -1
+    });
+  }
+
+  function requestLocation(force) {
+    if (!currentIsOnline || !currentActive) return;
+    if (!navigator.geolocation) {
+      handlePositionError({ code: 2, message: "Geolocation is not supported by your browser." });
+      return;
+    }
+    isRequesting = true;
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { handlePositionSuccess(pos, force); },
+      function(err) { handlePositionError(err); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }
+
+  function stopWatch() {
+    if (watchId !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    isRequesting = false;
+  }
+
+  window.addEventListener("message", function(event) {
+    if (!event.data) return;
+    if (event.data.type === "streamlit:render") {
+      const args = event.data.args || {};
+      const isOnline = (args.isOnline !== undefined) ? !!args.isOnline : true;
+      const active = isOnline && !!args.active;
+      const triggerId = (typeof args.triggerId === "number") ? args.triggerId : 0;
+
+      currentIsOnline = isOnline;
+      currentActive = active;
+
+      if (!isOnline || !active) {
+        stopWatch();
+        if (!isOnline) {
+          lastLat = null;
+          lastLon = null;
+        }
+        return;
+      }
+
+      // ONLY request location when triggerId is positive and differs from lastTriggerId (explicit user click)
+      const isTriggered = (triggerId > 0 && triggerId !== lastTriggerId);
+
+      if (isTriggered) {
+        lastTriggerId = triggerId;
+        lastLat = null;
+        lastLon = null;
+        requestLocation(true);
+      }
+    }
+  });
+
+  // Signal component readiness to Streamlit
+  window.parent.postMessage({
+    isStreamlitMessage: true,
+    type: "streamlit:componentReady",
+    apiVersion: 1
+  }, "*");
+
+  setFrameHeight(0);
+</script>
+</body>
+</html>
